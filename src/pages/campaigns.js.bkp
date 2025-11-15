@@ -1,0 +1,1216 @@
+import Head from 'next/head';
+import {
+    Box, Container, Grid, Pagination, Button,
+    Card,
+    CardContent,
+    TextField,
+    InputAdornment,
+    SvgIcon,
+    Typography,
+    Avatar,
+    Link,
+    Divider,
+    IconButton,
+    Badge,
+    CardHeader,
+    Modal,
+    FormControl,
+    Select,
+    MenuItem,
+    InputLabel,
+    List,
+    ListItem,
+    ListItemButton,
+    ListItemIcon,
+    ListItemText,
+    Checkbox,
+    FormGroup,
+    FormControlLabel,
+    Switch,
+    Slider,
+    Autocomplete
+} from '@mui/material';
+import { RootRef } from '@material-ui/core';
+
+import ForwardToInboxIcon from '@mui/icons-material/ForwardToInbox';
+import MapsUgcIcon from '@mui/icons-material/MapsUgc';
+import { Download as DownloadIcon } from '../icons/download';
+import { Search as SearchIcon } from '../icons/search';
+import PersonSearchIcon from '@mui/icons-material/PersonSearch';
+import PersonAddAltIcon from '@mui/icons-material/PersonAddAlt';
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faUserCheck, faUser, faInbox, faReplyAll, faUsers } from "@fortawesome/free-solid-svg-icons";
+import DeleteIcon from '@mui/icons-material/Delete';
+import { DashboardLayout } from '../components/dashboard-layout';
+import { useFormik } from 'formik';
+import * as Yup from 'yup';
+import axios from 'axios';
+import { useQuery, useMutation } from 'react-query'
+
+import NextLink from 'next/link';
+import Delete from '@mui/icons-material/Delete';
+import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import AddCircle from '@mui/icons-material/AddCircle';
+import ThumbUpIcon from '@mui/icons-material/ThumbUp';
+import AddIcon from '@mui/icons-material/Add';
+import VolunteerActivismIcon from '@mui/icons-material/VolunteerActivism';
+import MailIcon from '@mui/icons-material/Mail';
+import { useState, useMemo, useEffect } from "react";
+import { campaignListCreateUrl, triggerCampaignUrl, campaignSequenceListCreateUrl, linkedinAccountsListUrl, campaignLinkedinAccountsCreateUrl } from '../config';
+import { useSelector } from 'react-redux';
+import { selectProfile } from '../features/profile/profileSlice';
+import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
+
+
+const style = {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    width: 600,
+    bgcolor: 'background.paper',
+    border: '2px solid #000',
+    boxShadow: 24,
+    p: 4,
+};
+
+const Campaigns = () => {
+
+    const [addNewForm, setAddNewForm] = useState(false)
+    const [open, setOpen] = useState(false);
+    const [sequenceModalOpen, setSequenceModalOpen] = useState(false);
+    const [selectedCampaign, setSelectedCampaign] = useState("");
+    const [campaigns, setCampaigns] = useState([]);
+    const [linkedinAccounts, setLinkedinAccounts] = useState([]);
+    const [selectedLinkedinAccounts, setSelectedLinkedinAccounts] = useState([]);
+    const [sequenceListOptions, setSequenceListOptions] = useState([
+        { key: "send_connection_request", title: "Send Connection Request", icon: <PersonAddAltIcon /> },
+        { key: "send_message", title: "Send Message", icon: <MapsUgcIcon /> },
+        { key: "send_inmail", title: "Send InMail", icon: <ForwardToInboxIcon /> },
+        { key: "like_3_posts", title: "Like 3 Posts", icon: <ThumbUpIcon /> },
+        { key: "follow", title: "Follow", icon: <AddIcon /> },
+        { key: "endorse_top_5_skills", title: "Endorse Top 5 Skills", icon: <VolunteerActivismIcon /> },
+        { key: "send_email", title: "Send Email", icon: <MailIcon /> },
+    ]);
+    const [sequenceList, setSequenceList] = useState([
+        // { key: "crawl_total_prospects", title: "Crawl Prospects", icon: <PersonSearchIcon /> },
+        // { key: "send_connection_request", title: "Send Connection Request", icon: <PersonAddAltIcon /> },
+        // { key: "send_follow_up_message", title: "Send Follow Up Message", icon: <MapsUgcIcon /> },
+        // { key: "send_inmail", title: "Send InMail", icon: <ForwardToInboxIcon /> },
+    ]);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [searchInput, setSearchInput] = useState('');
+    const user = useSelector(selectProfile);
+    const formik = useFormik({
+        initialValues: {
+            name: '',
+            search_url: '',
+            linkedin_account: '',
+            crawl_total_prospects: 25,
+            connection_requests_per_day: 10,
+        },
+        validationSchema: Yup.object({
+            name: Yup
+                .string()
+                .max(500)
+                .required(
+                    'Name is required'),
+            search_url: Yup
+                .string()
+                .url().required(),
+            crawl_total_prospects: Yup
+                .number()
+                .min(10).max(2000).default(10),
+            connection_requests_per_day: Yup
+                .number()
+                .min(1).max(100).default(10),
+        }),
+        onSubmit: async (values, { setSubmitting, resetForm }) => {
+            try {
+
+                if (!selectedLinkedinAccounts.length) return
+
+                const resp = await createResource.mutateAsync({
+                    values,
+                    url: campaignListCreateUrl,
+                })
+
+                sequenceList.map(async (item, idx) => {
+
+                    const payload = { campaign: resp.data.id, delay_in_hours: item.delay_in_hours, step: item.key, order: idx }
+
+                    if (item.key === "send_connection_request") {
+                        payload.note = `${item.note}`
+
+                    } else if (item.key === "send_message") {
+                        payload.message = `${item.message}`
+
+                    } else if (item.key === "send_inmail") {
+                        payload.inmail_subject = item.inmail_subject
+                        payload.inmail_message = item.inmail_message
+
+                    } else if (item.key === "send_email") {
+                        payload.google_account = item.google_account
+                        payload.smtp_account = item.smtp_account
+                        payload.from_email = item.from_email
+                        payload.email_subject = item.email_subject
+                        payload.email_message = item.email_message
+                    }
+
+                    await createResource.mutateAsync({
+                        values: payload,
+                        url: `${campaignSequenceListCreateUrl}`,
+                    })
+                })
+
+                selectedLinkedinAccounts.map(async (linkedinAccount) => {
+
+                    const payload = { linkedin_account: linkedinAccount.id, campaign: resp.data.id }
+
+                    await createResource.mutateAsync({
+                        values: payload,
+                        url: `${campaignLinkedinAccountsCreateUrl}`,
+                    })
+                })
+
+                await createResource.mutateAsync({
+                    values: {},
+                    url: `${triggerCampaignUrl}${resp.data.id}/`,
+                })
+
+                await createResource.mutateAsync({
+                    values: {},
+                    url: `${triggerCampaignUrl}${resp.data.id}/`,
+                })
+
+                setAddNewForm(false);
+                resetForm();
+                refetch();
+            } catch (err) {
+                console.log(err)
+            } finally {
+                setSubmitting(false);
+            }
+        }
+    });
+
+    const stepFormik = useFormik({
+        initialValues: {
+            step: 1,
+            delay_in_hours: 1,
+            connection_request_with_note: false,
+            note: "",
+            message: "",
+            inmail_subject: "",
+            inmail_message: "",
+            from_email: "",
+            email_subject: "",
+            email_message: "",
+        },
+        validationSchema: Yup.object({
+            step: Yup.number(),
+            delay_in_hours: Yup.number().min(1).max(48).required(),
+            connection_request_with_note: Yup.boolean().default(false),
+            note: Yup.string().max(299).when('connection_request_with_note', {
+                is: true,
+                then: Yup.string().required(),
+            }),
+            message: Yup.string().max(7999).when('step', {
+                is: 1,
+                then: Yup.string().required(),
+            }),
+            inmail_subject: Yup.string().max(200).when('step', {
+                is: 2,
+                then: Yup.string().required(),
+            }),
+            inmail_message: Yup.string().max(486).when('step', {
+                is: 2,
+                then: Yup.string().required(),
+            }),
+            email_account: Yup.string().when('step', {
+                is: 6,
+                then: Yup.string().required(),
+            }),
+            email_subject: Yup.string().max(200).when('step', {
+                is: 6,
+                then: Yup.string().required(),
+            }),
+            from_email: Yup.string().email().max(200),
+            email_message: Yup.string().max(700).when('step', {
+                is: 6,
+                then: Yup.string().required(),
+            }),
+        }),
+        onSubmit: (values, { setSubmitting, resetForm }) => {
+            const currentStep = sequenceListOptions[values.step];
+
+            if (currentStep.key === "send_connection_request") {
+                currentStep.description = `With Note: ${values.connection_request_with_note ? "on" : "off"}, ${values.connection_request_with_note ? `Note: ${values.note.slice(0, 60)}` : ''}`
+                currentStep.note = `${values.note}`
+            }
+
+            if (currentStep.key === "send_message") {
+                currentStep.description = `Message: ${values.message.slice(0, 60)}`
+                currentStep.message = `${values.message}`
+            }
+
+            if (currentStep.key === "send_inmail") {
+                currentStep.inmail_subject = values.inmail_subject
+                currentStep.inmail_message = values.inmail_message
+                currentStep.description = `Subject: ${values.inmail_subject.slice(0, 60)}, Body: ${values.inmail_message.slice(0, 60)}`
+            }
+
+            if (currentStep.key === "like_3_posts") {
+                currentStep.description = `Description: Like The Latest 3 Posts`
+            }
+
+            if (currentStep.key === "follow") {
+                currentStep.description = `Description: Follow The User Linkedin Account`
+            }
+
+            if (currentStep.key === "endorse_top_5_skills") {
+                currentStep.description = `Description: Endorse The User 5 Top Skills`
+            }
+
+            if (currentStep.key === "endorse_top_5_skills") {
+                currentStep.description = `Description: Endorse The User 5 Top Skills`
+            }
+
+            if (currentStep.key === "send_email") {
+                if (values.email_account <= user.details.smtp_connected_accounts.length - 1) {
+                    currentStep.smtp_account = values.email_account
+                } else {
+                    currentStep.google_account = values.email_account
+                }
+                currentStep.from_email = values.from_email
+                currentStep.email_subject = values.email_subject
+                currentStep.email_message = values.email_message
+                currentStep.description = `Subject: ${values.email_subject.slice(0, 60)}, Body: ${values.email_message.slice(0, 60)}`
+            }
+
+            currentStep.delay_in_hours = values.delay_in_hours
+
+            setSequenceModalOpen(false);
+            setSequenceList([
+                ...sequenceList,
+                currentStep,
+            ]);
+            setSubmitting(false);
+            resetForm()
+        }
+    });
+
+
+    const config = useMemo(
+        () => ({
+            headers: {
+                Authorization: `Bearer ${user.token}`,
+            },
+        }),
+        [user.token]
+    );
+    1
+    const createResource = useMutation(({ url, values }) =>
+        axios.post(url, values, config)
+    );
+
+    const updateResource = useMutation(({ url, values }) =>
+        axios.patch(url, values, config)
+    );
+
+    const deleteResource = useMutation(({ url }) =>
+        axios.delete(url, config)
+    )
+
+    const {
+        refetchLinkedinAccounts,
+        data: linkedinAccountsList,
+    } = useQuery(
+        ['linkedinAccounts'],
+        () =>
+            axios.get(
+                `${linkedinAccountsListUrl}?ready_for_use=true&connected=true`, config)
+                .then((res) => res.data),
+        { enabled: !!user.token }
+    )
+
+    const {
+        isFetching,
+        refetch,
+        isError,
+        data: campaignsList,
+    } = useQuery(
+        ['campaigns', searchTerm],
+        () =>
+            axios.get(
+                `${campaignListCreateUrl}?search=${searchTerm}`, config)
+                .then((res) => res.data),
+        { enabled: !!user.token }
+    )
+
+    const handleClose = () => setOpen(false);
+
+    const reorder = (list, startIndex, endIndex) => {
+        const result = Array.from(list);
+        const [removed] = result.splice(startIndex, 1);
+
+        result.splice(endIndex, 0, removed)
+
+        return result;
+    };
+
+    const handleDragEnd = async (result) => {
+        if (!result.destination) return;
+
+        const { source, destination } = result;
+
+        if (source.droppableId === destination.droppableId) return;
+
+        console.log(source, destination)
+
+        console.log(reorder(
+            sequenceList,
+            source.index,
+            destination.index
+        ))
+
+
+        setSequenceList(reorder(
+            sequenceList,
+            source.index,
+            destination.index
+        ));
+    };
+
+    useEffect(() => {
+        if (!campaignsList) return;
+        setCampaigns(campaignsList);
+    }, [campaignsList]);
+
+    useEffect(() => {
+        if (!linkedinAccountsList) return;
+        setLinkedinAccounts(linkedinAccountsList);
+    }, [linkedinAccountsList]);
+
+
+    useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            setSearchTerm(searchInput);
+        }, 400);
+
+        return () => {
+            clearTimeout(timeoutId);
+        };
+    }, [searchInput]);
+
+    return (
+        <>
+            <Head>
+                <title>
+                    Campaigns | Newson
+                </title>
+            </Head>
+            <Box
+                component="main"
+                sx={{
+                    flexGrow: 1,
+                    py: 3
+                }}
+            >
+                <Container maxWidth={false}>
+                    <Box>
+                        <Box
+                            sx={{
+                                alignItems: 'center',
+                                display: !addNewForm ? 'flex' : 'block',
+                                justifyContent: 'space-between',
+                                flexWrap: 'wrap',
+                                m: -1
+                            }}
+                        >
+                            <Typography
+                                sx={{ m: 1 }}
+                                variant="h5"
+                            >
+                                {!addNewForm ? 'Campaigns' : 'Create A Campaign'}
+                            </Typography>
+                            {!addNewForm ? (<><Box sx={{ m: 1, display: "flex" }}>
+                                <Button
+                                    startIcon={(<DownloadIcon fontSize="small" />)}
+                                    sx={{ mr: 1 }}
+                                >
+                                    Export
+                                </Button>
+                                <Button
+                                    color="primary"
+                                    variant="contained"
+                                    onClick={() => setAddNewForm(true)}
+                                >
+                                    Add Campaign
+                                </Button>
+                                <TextField
+                                    sx={{ ml: 1 }}
+                                    InputProps={{
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <SvgIcon
+                                                    color="action"
+                                                    fontSize="small"
+                                                >
+                                                    <SearchIcon />
+                                                </SvgIcon>
+                                            </InputAdornment>
+                                        )
+                                    }}
+                                    placeholder="Search Campaign"
+                                    variant="outlined"
+                                    size="small"
+                                    value={searchInput}
+                                    onChange={(e) => setSearchInput(e.currentTarget.value)}
+                                />
+                            </Box></>) : (
+                                <Box sx={{ mt: 3 }}>
+                                    <form onSubmit={formik.handleSubmit}>
+                                        <Card>
+                                            <CardContent>
+                                                <TextField
+                                                    error={Boolean(formik.touched.name && formik.errors.name)}
+                                                    fullWidth
+                                                    helperText={formik.touched.name && formik.errors.name}
+                                                    label="Name"
+                                                    placeholder="Assets Manager"
+                                                    margin="normal"
+                                                    name="name"
+                                                    onBlur={formik.handleBlur}
+                                                    onChange={formik.handleChange}
+                                                    type="text"
+                                                    value={formik.values.name}
+                                                    variant="outlined"
+                                                />
+                                                <TextField
+                                                    error={Boolean(formik.touched.search_url && formik.errors.search_url)}
+                                                    fullWidth
+                                                    helperText={formik.touched.search_url && formik.errors.search_url}
+                                                    label="Search Url"
+                                                    placeholder="https://www.linkedin.com/search/results/people/?keywords=example"
+                                                    margin="normal"
+                                                    name="search_url"
+                                                    onBlur={formik.handleBlur}
+                                                    onChange={formik.handleChange}
+                                                    type="text"
+                                                    value={formik.values.search_url}
+                                                    variant="outlined"
+                                                />
+                                                <Autocomplete
+                                                    multiple
+                                                    options={linkedinAccounts}
+                                                    value={selectedLinkedinAccounts}
+                                                    onChange={(event, newValue) => {
+                                                        setSelectedLinkedinAccounts(newValue);
+                                                    }}
+                                                    getOptionLabel={(option) => option.name}
+                                                    renderInput={(params) => (
+                                                        <TextField
+                                                            {...params}
+                                                            variant="standard"
+                                                            label="Linkedin Accounts"
+                                                            placeholder="Select Your Linkedin Accounts"
+                                                        />
+                                                    )}
+                                                />
+                                                <Box sx={{ mt: "15px", ml: "8px" }}>
+                                                    <Typography id="non-linear-slider" gutterBottom>
+                                                        Prospects: {formik.values.crawl_total_prospects}
+
+                                                    </Typography>
+                                                    <Slider
+                                                        sx={{ width: "98%", ml: "11px" }}
+                                                        value={formik.values.crawl_total_prospects}
+                                                        min={25}
+                                                        step={25}
+                                                        max={2000}
+                                                        error={Boolean(formik.touched.crawl_total_prospects && formik.errors.crawl_total_prospects)}
+                                                        helperText={formik.touched.crawl_total_prospects && formik.errors.crawl_total_prospects}
+                                                        onBlur={formik.handleBlur}
+                                                        onChange={formik.handleChange}
+                                                        name="crawl_total_prospects"
+                                                        valueLabelDisplay="auto"
+                                                        aria-labelledby="non-linear-slider"
+                                                    // fullWidth
+                                                    />
+                                                </Box>
+                                                <Box sx={{ mt: "5px", ml: "8px" }}>
+                                                    <Typography id="non-linear-slider" gutterBottom>
+                                                        Connection Requests Per Day: {formik.values.connection_requests_per_day}
+
+                                                    </Typography>
+                                                    <Slider
+                                                        sx={{ width: "98%", ml: "11px" }}
+                                                        value={formik.values.connection_requests_per_day}
+                                                        min={1}
+                                                        max={formik.values.crawl_total_prospects > 100 ? 100 : formik.values.crawl_total_prospects}
+                                                        error={Boolean(formik.touched.connection_requests_per_day && formik.errors.connection_requests_per_day)}
+                                                        helperText={formik.touched.connection_requests_per_day && formik.errors.connection_requests_per_day}
+                                                        onBlur={formik.handleBlur}
+                                                        onChange={formik.handleChange}
+                                                        name="connection_requests_per_day"
+                                                        valueLabelDisplay="auto"
+                                                        aria-labelledby="non-linear-slider"
+                                                    // fullWidth
+                                                    />
+                                                </Box>
+                                                <Typography id="non-linear-slider" gutterBottom sx={{ ml: "8px" }}>
+                                                    Sequence
+                                                    <IconButton aria-label="addSequence" color="primary" onClick={() => setSequenceModalOpen(true)}>
+                                                        <AddCircle />
+                                                    </IconButton>
+                                                </Typography>
+                                                <DragDropContext
+                                                    onDragEnd={(result) =>
+                                                        // handleDragEnd(result, tasks, handleSaveCardDrag)
+                                                        handleDragEnd(result)
+                                                    }
+                                                >
+                                                    <div className='relative flex flex-col flex-grow px-4 py-4 space-y-3 overflow-y-auto bg-white'>
+                                                        <div className='flex items-center w-full p-2 text-sm border rounded-md shadow-sm cursor-pointer select-none group'>
+                                                            <ListItem
+                                                                disablePadding
+                                                            >
+                                                                <ListItemButton>
+                                                                    <ListItemIcon sx={{ minWidth: "40px" }}>
+                                                                        <PersonSearchIcon />
+                                                                    </ListItemIcon>
+                                                                    <ListItemText primary="Crawl Prospects" secondary={
+                                                                        <>
+                                                                            <Box sx={{
+                                                                                fontSize: "12px",
+                                                                                backgroundColor: "#5048E5",
+                                                                                color: "white",
+                                                                                borderRadius: "10px",
+                                                                                px: 1,
+                                                                                textAlign: "center",
+                                                                                width: "max-content"
+                                                                            }}>Step 1</Box>
+                                                                            {"Crawl all the prospects from campaign search url."}
+                                                                        </>
+                                                                    } />
+                                                                </ListItemButton>
+                                                            </ListItem>
+                                                        </div>
+                                                    </div>
+                                                    {sequenceList.map((item, index) => {
+                                                        return (
+                                                            <Droppable droppableId={item.key} key={item.key}>
+                                                                {(provided, snapshot) => (
+                                                                    <div
+                                                                        {...provided.droppableProps}
+                                                                        ref={provided.innerRef}
+                                                                        className='relative flex flex-col flex-grow px-4 py-4 space-y-3 overflow-y-auto bg-white'
+                                                                        style={{
+                                                                            background: snapshot.isDraggingOver ? 'lightblue' : 'white',
+                                                                        }}
+                                                                    >
+                                                                        <Draggable key={`${item.key}_item`} draggableId={`${item.key}_item`} index={index}>
+                                                                            {(provided2, snapshot2) => (
+                                                                                <div
+                                                                                    className='flex items-center w-full p-2 text-sm border rounded-md shadow-sm cursor-pointer select-none group'
+                                                                                    ref={provided2.innerRef}
+                                                                                    {...provided2.draggableProps}
+                                                                                    {...provided2.dragHandleProps}
+                                                                                    style={{
+                                                                                        background: snapshot2.isDraggingOver ? 'lightblue' : 'white',
+                                                                                        ...provided2.draggableProps.style,
+                                                                                    }}
+                                                                                >
+                                                                                    <ListItem
+                                                                                        disablePadding
+                                                                                    >
+                                                                                        <ListItemButton>
+                                                                                            <ListItemIcon sx={{ minWidth: "40px" }}>
+                                                                                                {item.icon}
+                                                                                            </ListItemIcon>
+                                                                                            <ListItemText primary={item.title} secondary={
+                                                                                                <>
+                                                                                                    <Box sx={{
+                                                                                                        fontSize: "12px",
+                                                                                                        backgroundColor: "#5048E5",
+                                                                                                        color: "white",
+                                                                                                        borderRadius: "10px",
+                                                                                                        px: 1,
+                                                                                                        textAlign: "center",
+                                                                                                        width: "max-content"
+                                                                                                    }}>Step {index + 2}</Box>
+                                                                                                    Delay In Hours: {item.delay_in_hours}, {item.description}
+                                                                                                </>
+                                                                                            } />
+                                                                                            <ListItemIcon sx={{ minWidth: "40px" }} onClick={() => {
+                                                                                                const newSequenceList = [...sequenceList]
+                                                                                                newSequenceList.splice(index, 1);
+                                                                                                setSequenceList(newSequenceList)
+                                                                                            }}>
+                                                                                                <DeleteIcon />
+                                                                                            </ListItemIcon>
+                                                                                        </ListItemButton>
+                                                                                    </ListItem>
+                                                                                </div>
+                                                                            )}
+                                                                        </Draggable>
+                                                                        {provided.placeholder}
+                                                                    </div>
+                                                                )}
+                                                            </Droppable>
+                                                        )
+                                                    })}
+
+                                                </DragDropContext>
+                                            </CardContent>
+                                            <Divider />
+                                            <Box
+                                                sx={{
+                                                    display: 'flex',
+                                                    justifyContent: 'flex-end',
+                                                    p: 2
+                                                }}
+                                            >
+                                                <Button
+                                                    color="primary"
+                                                    variant="outlined"
+                                                    sx={{ mr: 1 }}
+                                                    onClick={() => { setAddNewForm(false) }}
+                                                >
+                                                    Cancel
+                                                </Button>
+                                                <Button
+                                                    color="primary"
+                                                    variant="contained"
+                                                    disabled={formik.isSubmitting}
+                                                    type="submit"
+                                                    sx={{ mr: 1 }}
+                                                >
+                                                    Create Campaign
+                                                </Button>
+                                            </Box>
+                                        </Card>
+                                    </form>
+                                </Box>)}
+
+                        </Box>
+                    </Box>
+                    <Box sx={{ pt: 3 }}>
+                        <Grid
+                            container
+                            spacing={3}
+                        >
+                            {campaigns.map((campaign) => (
+                                <Grid
+                                    item
+                                    key={campaign.id}
+                                    lg={4}
+                                    md={6}
+                                    xs={12}
+                                >
+                                    <Card
+                                        sx={{
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            height: '100%'
+                                        }}
+                                    >
+                                        <CardContent>
+                                            <Box>
+                                                <Box sx={{
+                                                    alignItems: 'center',
+                                                    display: !addNewForm ? 'flex' : 'block',
+                                                    justifyContent: 'space-between',
+                                                    flexWrap: 'wrap',
+                                                }}>
+                                                    <Box>
+                                                        <NextLink
+                                                            href="/"
+                                                            passHref
+                                                        >
+                                                            <Link underline="hover">
+                                                                <Typography
+                                                                    color="textPrimary"
+                                                                    gutterBottom
+                                                                    variant="h5"
+                                                                >
+                                                                    {campaign.name}
+                                                                </Typography>
+                                                            </Link>
+                                                        </NextLink>
+                                                    </Box>
+
+                                                    <Box>
+                                                        {campaign.status === "Pending" || campaign.status === "Waiting For User Connections" ? (<Box sx={{
+                                                            fontSize: "12px",
+                                                            backgroundColor: "#FFB020",
+                                                            color: "white",
+                                                            borderRadius: "10px",
+                                                            px: 1,
+                                                            textAlign: "center"
+                                                        }}>Pending</Box>) : null}
+                                                        {campaign.status === "Finished" ? (<Box sx={{
+                                                            fontSize: "12px",
+                                                            backgroundColor: "#5048E5",
+                                                            color: "white",
+                                                            borderRadius: "10px",
+                                                            px: 1,
+                                                            textAlign: "center"
+                                                        }}>Finished</Box>) : null}
+                                                        {campaign.status === "Failed" ? (<Box sx={{
+                                                            fontSize: "12px",
+                                                            backgroundColor: "#D14343",
+                                                            color: "white",
+                                                            borderRadius: "10px",
+                                                            px: 1,
+                                                            textAlign: "center"
+                                                        }}>Failed</Box>) : null}
+                                                        {campaign.status === "Stopped" ? (<Box sx={{
+                                                            fontSize: "12px",
+                                                            backgroundColor: "#D14343",
+                                                            color: "white",
+                                                            borderRadius: "10px",
+                                                            px: 1,
+                                                            textAlign: "center"
+                                                        }}>Stopped</Box>) : null}
+                                                        {campaign.status === "Running" ? (<Box sx={{
+                                                            fontSize: "12px",
+                                                            backgroundColor: "rgb(16, 185, 129)",
+                                                            color: "white",
+                                                            borderRadius: "10px",
+                                                            px: 1,
+                                                            textAlign: "center"
+                                                        }}>Running</Box>) : null}
+                                                    </Box>
+
+
+                                                </Box>
+
+                                                <Box>
+                                                    <IconButton aria-label="delete" sx={{ px: "0px", py: "5px" }} onClick={() => { setSelectedCampaign(campaign.id); setOpen(true) }}>
+                                                        <DeleteIcon color="error" />
+                                                    </IconButton>
+                                                    <IconButton aria-label="stop" sx={{ px: "0px", pl: "5x", py: "5px" }} onClick={
+                                                        async () => {
+                                                            await updateResource.mutateAsync({ url: `${campaignListCreateUrl}${campaign.id}/`, values: { status: "Stopped" } })
+                                                            refetch();
+                                                        }
+                                                    }>
+                                                        <PowerSettingsNewIcon color="dark" />
+                                                    </IconButton>
+                                                    <IconButton aria-label="resume" sx={{ px: "0px", pl: "5x", py: "5px", color: "#2cd321d9" }} onClick={
+                                                        async () => {
+                                                            await updateResource.mutateAsync({ url: `${campaignListCreateUrl}${campaign.id}/`, values: { status: "Running" } })
+                                                            await createResource.mutateAsync({
+                                                                values: {},
+                                                                url: `${triggerCampaignUrl}${campaign.id}/`,
+                                                            })
+                                                            refetch();
+                                                        }
+                                                    }>
+                                                        <PlayArrowIcon color="success" />
+                                                    </IconButton>
+                                                    {/* <IconButton aria-label="resume" sx={{ px: "0px", pl: "5x", py: "5px" }}>
+                                                        <PauseIcon color="warning" />
+                                                    </IconButton> */}
+                                                </Box>
+                                            </Box>
+
+                                            <Box sx={{ mt: 2 }}>
+                                                <Grid
+                                                    container
+                                                    spacing={2}
+                                                    sx={{ justifyContent: 'space-between' }}
+                                                >
+                                                    <Grid
+                                                        item
+                                                        sx={{
+                                                            alignItems: 'center',
+                                                            display: 'flex'
+                                                        }}
+                                                    >
+                                                        <FontAwesomeIcon size='md' color="gray" icon={faUsers}></FontAwesomeIcon>
+                                                        <Typography
+                                                            color="textSecondary"
+                                                            display="inline"
+                                                            sx={{ pl: 1 }}
+                                                            variant="body2"
+                                                        >
+                                                            Total Prospects Crawled {campaign.total_prospects_crawled}
+                                                        </Typography>
+                                                    </Grid>
+                                                    <Grid
+                                                        item
+                                                        sx={{
+                                                            alignItems: 'center',
+                                                            display: 'flex'
+                                                        }}
+                                                    >
+                                                        <FontAwesomeIcon size='md' color="gray" icon={faUser}></FontAwesomeIcon>
+                                                        <Typography
+                                                            color="textSecondary"
+                                                            display="inline"
+                                                            sx={{ pl: 1 }}
+                                                            variant="body2"
+                                                        >
+                                                            Connection Request Sent {campaign.total_connection_request_sent}
+                                                        </Typography>
+                                                    </Grid>
+                                                    <Grid
+                                                        item
+                                                        sx={{
+                                                            alignItems: 'center',
+                                                            display: 'flex'
+                                                        }}
+                                                    >
+                                                        <FontAwesomeIcon size='md' color="gray" icon={faUserCheck}></FontAwesomeIcon>
+                                                        <Typography
+                                                            color="textSecondary"
+                                                            display="inline"
+                                                            sx={{ pl: 1 }}
+                                                            variant="body2"
+                                                        >
+                                                            Connection Request Accepted {campaign.total_connection_request_accepted}
+                                                        </Typography>
+                                                    </Grid>
+                                                    <Grid
+                                                        item
+                                                        sx={{
+                                                            alignItems: 'center',
+                                                            display: 'flex'
+                                                        }}
+                                                    >
+                                                        <FontAwesomeIcon size='md' color="gray" icon={faInbox}></FontAwesomeIcon>
+                                                        <Typography
+                                                            color="textSecondary"
+                                                            display="inline"
+                                                            sx={{ pl: 1 }}
+                                                            variant="body2"
+                                                        >
+                                                            Message Sent 0
+                                                        </Typography>
+                                                    </Grid>
+                                                    <Grid
+                                                        item
+                                                        sx={{
+                                                            alignItems: 'center',
+                                                            display: 'flex'
+                                                        }}
+                                                    >
+                                                        <FontAwesomeIcon size='md' color="gray" icon={faReplyAll}></FontAwesomeIcon>
+                                                        <Typography
+                                                            color="textSecondary"
+                                                            display="inline"
+                                                            sx={{ pl: 1 }}
+                                                            variant="body2"
+                                                        >
+                                                            Total Replies 30
+                                                        </Typography>
+                                                    </Grid>
+                                                </Grid>
+                                            </Box>
+                                        </CardContent>
+                                    </Card>
+                                </Grid>
+                            ))}
+                        </Grid>
+                    </Box>
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            pt: 3
+                        }}
+                    >
+                        <Pagination
+                            color="primary"
+                            count={3}
+                            size="small"
+                        />
+                    </Box>
+                </Container>
+            </Box>
+            <Modal
+                open={open}
+                onClose={handleClose}
+                aria-labelledby="add-search"
+                aria-describedby="modal-modal-description"
+            >
+                <Box sx={style}>
+                    <Typography id="add-search" variant="h5" component="h2">
+                        Are You Absolutely Sure?
+                    </Typography>
+                    <Typography id="add-search" variant="p" component="p" sx={{ mt: "10px" }}>
+                        This action cannot be undone. This will permanently delete the current record and data associated with it
+                    </Typography>
+                    <Box sx={{ mt: 1, textAlign: "right" }}>
+                        <Button
+                            color="primary"
+                            variant="outlined"
+                            sx={{ mr: 1 }}
+                            onClick={() => {
+                                setSelectedCampaign("");
+                                setOpen(false);
+                            }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            color="error"
+                            variant="contained"
+                            onClick={async () => {
+                                await deleteResource.mutateAsync({ url: `${campaignListCreateUrl}${selectedCampaign}/` })
+                                setSelectedCampaign("");
+                                refetch();
+                                setOpen(false);
+                            }}
+                            sx={{ mr: 1 }}
+                        >
+                            Delete
+                        </Button>
+                    </Box>
+                </Box>
+            </Modal>
+            <Modal
+                open={sequenceModalOpen}
+                onClose={handleClose}
+                aria-labelledby="add-search"
+                aria-describedby="modal-modal-description"
+            >
+                <Box sx={style}>
+                    <Typography id="add-search" variant="h5" component="h2">
+                        Add Sequence Step
+                    </Typography>
+                    <form onSubmit={stepFormik.handleSubmit}>
+                        <FormControl fullWidth sx={{ my: 2 }}>
+                            <Box sx={{ display: "flex" }}>
+                                <InputLabel id="step-label">Step</InputLabel>
+                                <Select
+                                    labelId="step-label"
+                                    name="step"
+                                    value={stepFormik.values.step}
+                                    label="Step"
+                                    fullWidth
+                                    onChange={stepFormik.handleChange}
+                                // onChange={(e) => { setSelectedSequenceOption({ ...sequenceListOptions[e.target.value] }); setSelectedSequenceOptionIdx(e.target.value) }}
+                                >
+                                    {sequenceListOptions.map((sequenceOption, idx) => {
+
+                                        if (sequenceOption.key === "send_connection_request") {
+                                            return <MenuItem value={idx} disabled={sequenceList.filter((step) => step.key === "send_connection_request").length}>{sequenceOption.title}</MenuItem>
+                                        } else if (sequenceOption.key === "send_email") {
+                                            return <MenuItem value={idx} disabled={!user.details.smtp_connected_accounts.length && !user.details.google_connected_accounts.length}>{sequenceOption.title}</MenuItem>
+                                        }
+
+                                        return <MenuItem value={idx} key={`sequence-option-${idx}`}>{sequenceOption.title}</MenuItem>
+
+                                    })}
+                                </Select>
+                                <TextField
+                                    error={Boolean(stepFormik.touched.delay_in_hours && stepFormik.errors.delay_in_hours)}
+                                    helperText={stepFormik.touched.delay_in_hours && stepFormik.errors.delay_in_hours}
+                                    onBlur={stepFormik.handleBlur}
+                                    onChange={stepFormik.handleChange}
+                                    value={stepFormik.values.delay_in_hours}
+                                    label="Delay In Hours"
+                                    type="number"
+                                    name="delay_in_hours"
+                                    sx={{ ml: 2 }}
+                                />
+                            </Box>
+                        </FormControl>
+
+                        {stepFormik.values.step === 0 ? (
+                            <>
+                                <FormControlLabel
+                                    control={<Switch
+                                        checked={stepFormik.values.connection_request_with_note}
+                                        value={stepFormik.values.connection_request_with_note}
+                                        onChange={stepFormik.handleChange}
+                                        name="connection_request_with_note"
+                                        inputProps={{ 'aria-label': 'controlled' }}
+                                    />}
+                                    label="Connection Request With Note" />
+
+                                {stepFormik.values.connection_request_with_note ? (
+                                    <TextField
+                                        error={Boolean(stepFormik.touched.note && stepFormik.errors.note)}
+                                        helperText={stepFormik.touched.note && stepFormik.errors.note}
+                                        onBlur={stepFormik.handleBlur}
+                                        onChange={stepFormik.handleChange}
+                                        value={stepFormik.values.note}
+                                        label="Note"
+                                        multiline
+                                        rows={3}
+                                        name="note"
+                                        placeholder="Hello, How Are You?"
+                                        fullWidth
+                                        sx={{ my: "15px" }}
+                                    />
+                                ) : null}
+                            </>
+
+                        ) : null}
+
+                        {stepFormik.values.step === 1 ? (
+                            <>
+                                <TextField
+                                    error={Boolean(stepFormik.touched.message && stepFormik.errors.message)}
+                                    helperText={stepFormik.touched.message && stepFormik.errors.message}
+                                    onBlur={stepFormik.handleBlur}
+                                    onChange={stepFormik.handleChange}
+                                    value={stepFormik.values.message}
+                                    label="Message"
+                                    multiline
+                                    rows={3}
+                                    name="message"
+                                    placeholder="Hello, How Are You?"
+                                    fullWidth
+                                    sx={{ my: "15px" }}
+                                />
+                            </>
+
+                        ) : null}
+
+                        {stepFormik.values.step === 2 ? (
+                            <>
+                                <TextField
+                                    error={Boolean(stepFormik.touched.inmail_subject && stepFormik.errors.inmail_subject)}
+                                    fullWidth
+                                    helperText={stepFormik.touched.inmail_subject && stepFormik.errors.inmail_subject}
+                                    label="Inmail Subject"
+                                    placeholder="Introduction"
+                                    margin="normal"
+                                    name="inmail_subject"
+                                    onBlur={stepFormik.handleBlur}
+                                    onChange={stepFormik.handleChange}
+                                    type="text"
+                                    value={stepFormik.values.inmail_subject}
+                                    variant="outlined"
+                                />
+                                <TextField
+                                    error={Boolean(stepFormik.touched.inmail_message && stepFormik.errors.inmail_message)}
+                                    helperText={stepFormik.touched.inmail_message && stepFormik.errors.inmail_message}
+                                    onBlur={stepFormik.handleBlur}
+                                    onChange={stepFormik.handleChange}
+                                    value={stepFormik.values.inmail_message}
+                                    label="InMail Message"
+                                    multiline
+                                    rows={3}
+                                    name="inmail_message"
+                                    placeholder="Hello, How Are You?"
+                                    fullWidth
+                                    sx={{ my: "15px" }}
+                                />
+                            </>
+
+                        ) : null}
+
+                        {stepFormik.values.step === 6 ? (
+                            <>
+                                <FormControl fullWidth sx={{ my: 2 }}>
+                                    <InputLabel id="email-account-label">Email Account</InputLabel>
+                                    <Select
+                                        labelId="email-account-label"
+                                        name="email_account"
+                                        value={stepFormik.values.email_account}
+                                        // getOptionLabel={(option) => option.server}
+                                        label="Email Account"
+                                        fullWidth
+                                        onChange={stepFormik.handleChange}
+                                    >
+                                        {user.details.smtp_connected_accounts.map((smtp_account, idx) => <MenuItem value={idx}>{smtp_account.server} (SMTP{smtp_account.ssl ? " - SSL/TLS" : ''})</MenuItem>)}
+                                        {user.details.google_connected_accounts.map((google_account, idx) => <MenuItem value={user.details.smtp_connected_accounts.length + idx}>{google_account.name} ({google_account.email})</MenuItem>)}
+                                    </Select>
+                                </FormControl>
+                                
+                                {
+                                 stepFormik.values.email_account <= user.details.smtp_connected_accounts.length - 1 ? (
+                                    <TextField
+                                        error={Boolean(stepFormik.touched.from_email && stepFormik.errors.from_email)}
+                                        fullWidth
+                                        helperText={stepFormik.touched.from_email && stepFormik.errors.from_email}
+                                        label="From Email"
+                                        placeholder="sales@example.com"
+                                        margin="normal"
+                                        name="from_email"
+                                        onBlur={stepFormik.handleBlur}
+                                        onChange={stepFormik.handleChange}
+                                        type="text"
+                                        value={stepFormik.values.from_email}
+                                        variant="outlined"
+                                        required
+                                    />
+                                 )   : null
+                                }
+                                
+
+                                <TextField
+                                    error={Boolean(stepFormik.touched.email_subject && stepFormik.errors.email_subject)}
+                                    fullWidth
+                                    helperText={stepFormik.touched.email_subject && stepFormik.errors.email_subject}
+                                    label="Email Subject"
+                                    placeholder="Introduction"
+                                    margin="normal"
+                                    name="email_subject"
+                                    onBlur={stepFormik.handleBlur}
+                                    onChange={stepFormik.handleChange}
+                                    type="text"
+                                    value={stepFormik.values.email_subject}
+                                    variant="outlined"
+                                />
+                                <TextField
+                                    error={Boolean(stepFormik.touched.email_message && stepFormik.errors.email_message)}
+                                    helperText={stepFormik.touched.email_message && stepFormik.errors.email_message}
+                                    onBlur={stepFormik.handleBlur}
+                                    onChange={stepFormik.handleChange}
+                                    value={stepFormik.values.email_message}
+                                    label="Email Message"
+                                    multiline
+                                    rows={3}
+                                    name="email_message"
+                                    placeholder="Hello, How Are You?"
+                                    fullWidth
+                                    sx={{ my: "15px" }}
+                                />
+                            </>
+
+                        ) : null}
+
+                        <Box sx={{ mt: 1, textAlign: "right" }}>
+                            <Button
+                                color="primary"
+                                variant="outlined"
+                                sx={{ mr: 1 }}
+                                onClick={() => {
+                                    setSequenceModalOpen(false);
+                                }}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                color="primary"
+                                variant="contained"
+                                type="submit"
+                                disabled={stepFormik.isSubmitting}
+                                sx={{ mr: 1 }}
+                            >
+                                Add
+                            </Button>
+                        </Box>
+                    </form>
+                </Box>
+            </Modal>
+        </>
+    )
+};
+
+Campaigns.getLayout = (page) => (
+    <DashboardLayout>
+        {page}
+    </DashboardLayout>
+);
+
+export default Campaigns;
